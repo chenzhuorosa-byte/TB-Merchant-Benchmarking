@@ -1,0 +1,27 @@
+# Virtual environment
+.venv/
+
+# Database files — personal session data, not for sharing
+*.db
+
+# Generated Excel exports
+exports/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE settings
+.idea/
+.vscode/
+
+# Old development files (page dumps, old scraper)
+old/
+
+# Personal notes
+prompt draft.docx
+
+# OS files
+.DS_Store
+Thumbs.db

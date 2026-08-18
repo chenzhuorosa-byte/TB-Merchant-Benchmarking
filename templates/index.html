@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Talabat Merchant Scraper</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div class="container py-5">
+
+  <!-- Header -->
+  <div class="mb-4">
+    <h1 class="fw-bold">Talabat Merchant Scraper</h1>
+    <p class="text-muted">Collects data from listing cards AND individual restaurant pages.</p>
+  </div>
+
+  <!-- ================================================================
+       STEP 1 — Two URL inputs + Analyze
+  ================================================================ -->
+  <div class="card step-card mb-4" id="card-step1">
+    <div class="card-header step-header">
+      <span class="step-badge">1</span> Provide URLs &amp; Analyze Structure
+    </div>
+    <div class="card-body">
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Listing page URL <span class="text-danger">*</span></label>
+        <p class="text-muted small mb-1">The main page showing all restaurants in an area.</p>
+        <input type="text" id="listingUrl" class="form-control"
+          placeholder="https://www.talabat.com/kuwait/restaurants/52/mirqab?filter=TopRated%2CFreeDelivery&sort=a_z" />
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Example detail page URL <span class="text-danger">*</span></label>
+        <p class="text-muted small mb-1">
+          Click any restaurant on the listing page and paste its URL here.
+          Used only to preview available detail fields — the scraper will
+          automatically visit all restaurants found on the listing page.
+        </p>
+        <input type="text" id="detailUrl" class="form-control"
+          placeholder="https://www.talabat.com/kuwait/restaurant/799566/cookies-salmiya?aid=52" />
+      </div>
+
+      <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeUrls()">Analyze</button>
+
+      <div id="analyzeSpinner" class="mt-3 d-none">
+        <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+        Opening both pages and detecting fields… takes 20–30 seconds.
+      </div>
+      <div id="analyzeError" class="alert alert-danger mt-3 d-none"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       STEP 2 — Field selection (two groups)
+  ================================================================ -->
+  <div class="card step-card mb-4 d-none" id="card-step2">
+    <div class="card-header step-header">
+      <span class="step-badge">2</span> Choose Fields to Scrape
+    </div>
+    <div class="card-body">
+
+      <p class="text-muted small">
+        Total listing pages detected: <strong id="totalPagesDisplay">—</strong>.
+        Pages to scrape:
+        <input type="number" id="pagesToScrape" value="1" min="1" class="form-control form-control-sm d-inline-block" style="width:70px" />
+        <span class="text-muted small">(start with 1 to test; raise to scrape all)</span>
+      </p>
+
+      <!-- Listing fields -->
+      <div class="field-group mb-4">
+        <div class="field-group-header">
+          <span class="source-badge listing-badge">From listing page</span>
+          <span class="text-muted small ms-2">Basic info shown on each restaurant card</span>
+          <div class="float-end">
+            <button class="btn btn-xs btn-outline-secondary me-1" onclick="selectGroup('listing', true)">All</button>
+            <button class="btn btn-xs btn-outline-secondary" onclick="selectGroup('listing', false)">None</button>
+          </div>
+        </div>
+        <div class="row g-3 mt-1" id="listingFieldsList"></div>
+      </div>
+
+      <!-- Detail fields -->
+      <div class="field-group mb-4">
+        <div class="field-group-header">
+          <span class="source-badge detail-badge">From detail page</span>
+          <span class="text-muted small ms-2">Richer info from individual restaurant pages</span>
+          <div class="float-end">
+            <button class="btn btn-xs btn-outline-secondary me-1" onclick="selectGroup('detail', true)">All</button>
+            <button class="btn btn-xs btn-outline-secondary" onclick="selectGroup('detail', false)">None</button>
+          </div>
+        </div>
+        <div class="row g-3 mt-1" id="detailFieldsList"></div>
+      </div>
+
+      <button class="btn btn-success btn-lg" onclick="startScraping()">Start Scraping</button>
+      <div id="startError" class="alert alert-danger mt-3 d-none"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       STEP 3 — Two-phase progress
+  ================================================================ -->
+  <div class="card step-card mb-4 d-none" id="card-step3">
+    <div class="card-header step-header">
+      <span class="step-badge">3</span> Scraping Progress
+    </div>
+    <div class="card-body">
+
+      <!-- Phase 1 bar -->
+      <p class="fw-semibold mb-1">
+        <span class="source-badge listing-badge">Phase 1</span> Collecting merchants from listing pages
+      </p>
+      <div class="progress mb-1" style="height:22px">
+        <div id="bar1" class="progress-bar progress-bar-striped progress-bar-animated listing-bar"
+             role="progressbar" style="width:0%">0%</div>
+      </div>
+      <p class="text-muted small mb-4" id="phase1Text">Waiting to start…</p>
+
+      <!-- Phase 2 bar -->
+      <p class="fw-semibold mb-1">
+        <span class="source-badge detail-badge">Phase 2</span> Scraping individual restaurant pages
+      </p>
+      <div class="progress mb-1" style="height:22px">
+        <div id="bar2" class="progress-bar progress-bar-striped detail-bar"
+             role="progressbar" style="width:0%">—</div>
+      </div>
+      <p class="text-muted small mb-4" id="phase2Text">Waiting for Phase 1 to finish…</p>
+
+      <!-- Done -->
+      <div id="donePanel" class="d-none">
+        <div class="alert alert-success">All done! Both phases completed successfully.</div>
+        <button class="btn btn-primary btn-lg" onclick="downloadExcel()">Download Excel</button>
+      </div>
+
+      <!-- Paused -->
+      <div id="pausedPanel" class="d-none">
+        <div class="alert alert-warning" id="pausedMsg"></div>
+        <button class="btn btn-warning" onclick="resumeScraping()">Resume from where it stopped</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================================================================
+       Previous sessions
+  ================================================================ -->
+  <div class="card step-card" id="card-sessions">
+    <div class="card-header step-header d-flex justify-content-between align-items-center">
+      Previous Sessions
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadSessions()">Refresh</button>
+    </div>
+    <div class="card-body p-0" id="sessionsBody">
+      <p class="text-muted p-3 mb-0">Loading…</p>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ----------------------------------------------------------------
+// State
+// ----------------------------------------------------------------
+let listingUrl    = "";
+let detailUrl     = "";
+let totalPages    = 1;
+let sessionId     = "";
+let sseSource     = null;
+
+// ----------------------------------------------------------------
+// Step 1 — Analyze
+// ----------------------------------------------------------------
+async function analyzeUrls() {
+  listingUrl = document.getElementById("listingUrl").value.trim();
+  detailUrl  = document.getElementById("detailUrl").value.trim();
+
+  if (!listingUrl) { alert("Please enter the listing page URL."); return; }
+  if (!detailUrl)  { alert("Please enter an example detail page URL."); return; }
+
+  setAnalyzeLoading(true);
+  hide("analyzeError");
+  hide("card-step2");
+  hide("card-step3");
+
+  try {
+    const res  = await post("/analyze", { listing_url: listingUrl, detail_url: detailUrl });
+    const data = await res.json();
+    if (!data.success) { showAnalyzeError(data.error); return; }
+
+    totalPages = data.total_pages;
+    document.getElementById("totalPagesDisplay").textContent = data.total_pages;
+    document.getElementById("pagesToScrape").max             = data.total_pages;
+
+    renderFieldGroup("listingFieldsList", data.listing_fields, "listing");
+    renderFieldGroup("detailFieldsList",  data.detail_fields,  "detail");
+
+    show("card-step2");
+    document.getElementById("card-step2").scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    showAnalyzeError("Network error: " + err.message);
+  } finally {
+    setAnalyzeLoading(false);
+  }
+}
+
+function renderFieldGroup(containerId, fields, group) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = "";
+  for (const [key, info] of Object.entries(fields)) {
+    const samples = info.samples.length
+      ? info.samples.map(s => `<span class="badge bg-light text-dark border">${esc(s)}</span>`).join(" ")
+      : `<span class="text-muted small fst-italic">No sample found</span>`;
+    const badge = info.found ? "" : `<span class="badge bg-warning text-dark ms-1">not detected</span>`;
+    el.innerHTML += `
+      <div class="col-md-6">
+        <div class="field-card p-3 border rounded ${info.found ? "" : "field-missing"}">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox"
+              id="${group}_${key}" data-group="${group}" value="${key}"
+              ${info.found ? "checked" : ""} />
+            <label class="form-check-label fw-semibold" for="${group}_${key}">
+              ${esc(info.label)} ${badge}
+            </label>
+          </div>
+          <div class="text-muted small mb-1">${esc(info.description)}</div>
+          <div class="sample-values">${samples}</div>
+        </div>
+      </div>`;
+  }
+}
+
+function selectGroup(group, checked) {
+  document.querySelectorAll(`[data-group="${group}"]`).forEach(cb => cb.checked = checked);
+}
+
+// ----------------------------------------------------------------
+// Step 2 — Start
+// ----------------------------------------------------------------
+async function startScraping() {
+  const lFields = checkedValues("listing");
+  const dFields = checkedValues("detail");
+  const pages   = parseInt(document.getElementById("pagesToScrape").value) || 1;
+
+  if (!lFields.length && !dFields.length) {
+    showStartError("Please select at least one field."); return;
+  }
+  hide("startError");
+
+  try {
+    const res  = await post("/start", {
+      listing_url:   listingUrl,
+      listing_fields: lFields,
+      detail_fields:  dFields,
+      pages_to_scrape: pages,
+    });
+    const data = await res.json();
+    if (!data.success) { showStartError(data.error); return; }
+
+    sessionId = data.session_id;
+    resetBars();
+    show("card-step3");
+    document.getElementById("card-step3").scrollIntoView({ behavior: "smooth" });
+    startSSE(sessionId);
+  } catch (err) {
+    showStartError("Network error: " + err.message);
+  }
+}
+
+// ----------------------------------------------------------------
+// Step 3 — SSE progress
+// ----------------------------------------------------------------
+function startSSE(sid) {
+  if (sseSource) sseSource.close();
+  sseSource = new EventSource(`/progress/${sid}`);
+
+  sseSource.onmessage = e => {
+    const d = JSON.parse(e.data);
+    updateBars(d);
+    if (d.status === "completed" || d.status === "paused") {
+      sseSource.close();
+      loadSessions();
+    }
+  };
+  sseSource.onerror = () => sseSource.close();
+}
+
+function updateBars(d) {
+  // Phase 1 bar
+  const pct1  = d.phase1_total > 0 ? Math.round(d.phase1_current / d.phase1_total * 100) : 0;
+  const bar1  = document.getElementById("bar1");
+  bar1.style.width = pct1 + "%";
+  bar1.textContent = pct1 + "%";
+  if (d.phase1_current >= d.phase1_total && d.phase1_total > 0)
+    bar1.classList.remove("progress-bar-animated");
+  document.getElementById("phase1Text").textContent =
+    `Page ${d.phase1_current} of ${d.phase1_total}` +
+    (d.phase1_current >= d.phase1_total ? " ✓ Done" : "");
+
+  // Phase 2 bar
+  const bar2 = document.getElementById("bar2");
+  if (d.phase2_total > 0) {
+    const pct2 = Math.round(d.phase2_current / d.phase2_total * 100);
+    bar2.style.width = pct2 + "%";
+    bar2.textContent = pct2 + "%";
+    bar2.classList.add("progress-bar-animated");
+    document.getElementById("phase2Text").textContent =
+      `Restaurant ${d.phase2_current} of ${d.phase2_total}`;
+  }
+
+  // Status panels
+  if (d.status === "completed") {
+    bar1.classList.replace("listing-bar", "bg-success");
+    bar2.classList.remove("progress-bar-animated");
+    bar2.classList.replace("detail-bar", "bg-success");
+    show("donePanel"); hide("pausedPanel");
+  } else if (d.status === "paused") {
+    bar1.classList.remove("progress-bar-animated");
+    bar2.classList.remove("progress-bar-animated");
+    document.getElementById("pausedMsg").textContent =
+      "Scraping paused" + (d.error ? ": " + d.error : ".");
+    show("pausedPanel"); hide("donePanel");
+  }
+}
+
+function resetBars() {
+  const bar1 = document.getElementById("bar1");
+  const bar2 = document.getElementById("bar2");
+  [bar1, bar2].forEach(b => {
+    b.style.width = "0%"; b.textContent = "0%";
+    b.classList.add("progress-bar-animated");
+    b.classList.remove("bg-success", "bg-warning");
+  });
+  hide("donePanel"); hide("pausedPanel");
+  document.getElementById("phase1Text").textContent = "Waiting to start…";
+  document.getElementById("phase2Text").textContent = "Waiting for Phase 1 to finish…";
+}
+
+// ----------------------------------------------------------------
+// Download / Resume
+// ----------------------------------------------------------------
+function downloadExcel() { window.location.href = `/download/${sessionId}`; }
+
+async function resumeScraping() {
+  if (!sessionId) return;
+  const res  = await fetch(`/resume/${sessionId}`, { method: "POST" });
+  const data = await res.json();
+  if (!data.success) { alert("Error: " + data.error); return; }
+  hide("pausedPanel");
+  resetBars();
+  startSSE(sessionId);
+}
+
+// ----------------------------------------------------------------
+// Previous sessions
+// ----------------------------------------------------------------
+async function loadSessions() {
+  const body = document.getElementById("sessionsBody");
+  try {
+    const sessions = await (await fetch("/sessions")).json();
+    if (!sessions.length) {
+      body.innerHTML = `<p class="text-muted p-3 mb-0">No previous sessions yet.</p>`; return;
+    }
+
+    const rows = sessions.map(s => {
+      const p1pct = s.total_listing_pages > 0
+        ? Math.round(s.last_listing_page / s.total_listing_pages * 100) : 0;
+      const p2pct = s.total_merchants > 0
+        ? Math.round(s.done_merchants / s.total_merchants * 100) : 0;
+
+      const badge = {
+        completed: `<span class="badge bg-success">Done</span>`,
+        running:   `<span class="badge bg-primary">Running</span>`,
+        paused:    `<span class="badge bg-warning text-dark">Paused</span>`,
+      }[s.status] || `<span class="badge bg-secondary">${esc(s.status)}</span>`;
+
+      const actions = s.status === "completed"
+        ? `<button class="btn btn-sm btn-outline-primary" onclick="downloadSession('${s.session_id}')">Download</button>`
+        : s.status === "paused"
+          ? `<button class="btn btn-sm btn-outline-warning" onclick="resumeSession('${s.session_id}')">Resume</button>`
+          : "";
+
+      const shortUrl = esc(s.primary_url.replace("https://www.talabat.com","talabat.com").substring(0,45));
+
+      return `<tr>
+        <td><code>${esc(s.session_id)}</code></td>
+        <td class="text-truncate" style="max-width:180px" title="${esc(s.primary_url)}">${shortUrl}</td>
+        <td>${badge}</td>
+        <td class="small">P1: ${s.last_listing_page}/${s.total_listing_pages} (${p1pct}%)<br>
+            P2: ${s.done_merchants}/${s.total_merchants} (${p2pct}%)</td>
+        <td class="small">${esc(s.created_at)}</td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join("");
+
+    body.innerHTML = `
+      <table class="table table-hover mb-0 small align-middle">
+        <thead class="table-light">
+          <tr><th>ID</th><th>URL</th><th>Status</th><th>Progress</th><th>Started</th><th></th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (err) {
+    body.innerHTML = `<p class="text-danger p-3">Could not load sessions: ${esc(err.message)}</p>`;
+  }
+}
+
+function downloadSession(sid) { window.location.href = `/download/${sid}`; }
+
+async function resumeSession(sid) {
+  sessionId = sid;
+  const res  = await fetch(`/resume/${sid}`, { method: "POST" });
+  const data = await res.json();
+  if (!data.success) { alert("Error: " + data.error); return; }
+  resetBars();
+  show("card-step3");
+  document.getElementById("card-step3").scrollIntoView({ behavior: "smooth" });
+  startSSE(sid);
+  loadSessions();
+}
+
+// ----------------------------------------------------------------
+// Utilities
+// ----------------------------------------------------------------
+function post(path, body) {
+  return fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function checkedValues(group) {
+  return [...document.querySelectorAll(`[data-group="${group}"]:checked`)].map(cb => cb.value);
+}
+
+function show(id) { document.getElementById(id).classList.remove("d-none"); }
+function hide(id) { document.getElementById(id).classList.add("d-none"); }
+
+function setAnalyzeLoading(on) {
+  document.getElementById("analyzeBtn").disabled = on;
+  document.getElementById("analyzeSpinner").classList.toggle("d-none", !on);
+}
+
+function showAnalyzeError(msg) {
+  const el = document.getElementById("analyzeError");
+  el.textContent = msg; el.classList.remove("d-none");
+}
+
+function showStartError(msg) {
+  const el = document.getElementById("startError");
+  el.textContent = msg; el.classList.remove("d-none");
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// Load sessions on page open
+loadSessions();
+</script>
+</body>
+</html>
