@@ -1,6 +1,6 @@
 # Talabat Merchant Scraper
 
-A web scraper for Talabat Kuwait. Point it at any restaurant listing page and it collects merchant data from both the listing cards and each restaurant's detail page, then exports everything to a formatted Excel file.
+A web scraper for an outstanding Food&Delivery player. Point it at any restaurant listing page and it collects merchant data from both the listing cards and each restaurant's detail page, then exports everything to a formatted Excel file.
 
 Runs locally in your browser — no cloud account needed.
 
